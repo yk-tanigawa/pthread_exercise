@@ -104,6 +104,17 @@ int find_max_with_pthread(const int array_length)
     printf("%d\t%d\t%d\n", index, max[index], argmax[index]);
   }
 
+  int max_all = max[0], argmax_all = argmax[0];
+
+  for(index = 1; index < num_of_threads; index++){
+    if(max[index] > max_all){
+      max_all = max[index];
+      argmax_all = argmax[index];
+    }
+  }
+
+  printf("max = %d @ %d\n", max_all, argmax_all);
+
   free(max);
   free(argmax);
 
