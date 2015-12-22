@@ -10,7 +10,7 @@ RM = rm -f
 
 all: $(EXEC)
 
-test: test.o
+test: test.o pthread.h
 	$(LD) $(LDFLAGS) -o $@ $^
 
 test.o: pthread.h

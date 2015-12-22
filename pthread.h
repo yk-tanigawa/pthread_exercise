@@ -1,5 +1,5 @@
-#ifndef __PTHREAD_H__
-#define __PTHREAD_H__
+#ifndef __PTHREAD_TEMPLATE_H__
+#define __PTHREAD_TEMPLATE_H__
 
 #include <stdio.h>
 #include <pthread.h>
@@ -9,11 +9,13 @@
 /* struct for arguments for threads */
 typedef struct _thread_func_param
 {
-  double              width;
-  int                 begin;
-  int                 end;
-  double*             sum;
-  pthread_mutex_t*    mutex;
+  int *data;
+  int thread_id;
+  int begin;
+  int end;
+  int **max;
+  int **argmax;
+  pthread_mutex_t* mutex;  
 } thread_func_param;
 
 /* thread function */
@@ -21,53 +23,65 @@ void* thread_func(void* arg)
 {
   thread_func_param* param = (thread_func_param*)arg;
   int i = 0;
-  double height = 0.;
-  double middle = 0.;
-  double sum = 0.;
+  int thread_argmax = param->begin;
+  int thread_max = param->data[thread_argmax];
 
-  for (i = param->begin; i <= param->end; i++) {
-    middle = (i + 0.5) * param->width;
-    height = 4. / (1. + middle * middle);
-    sum += height;
+  for (i = param->begin + 1; i <= param->end; i++) {
+    if(param->data[i] > thread_max){
+      thread_max = param->data[i];
+      thread_argmax = i;
+      printf("thread %d\t%d\t%d\t%d\n", param->thread_id, i, thread_max, thread_argmax);
+    }
   }
 
   pthread_mutex_lock(param->mutex);
-  *(param->sum) += sum;
+  (*(param->max))[param->thread_id] = thread_max;
+  (*(param->argmax))[param->thread_id] = thread_argmax;
   pthread_mutex_unlock(param->mutex);
+
+  printf("thread %d\t%d\t%d\n", param->thread_id, thread_max, thread_argmax);
 
   return NULL;
 }
 
-/* compute approximate value of PI */
-double compute_pi_by_pthread(const int num_of_partitions)
+/* find max and argmax of an array of int */
+int find_max_with_pthread(const int array_length)
 {
-  if (num_of_partitions < 1) return -1.;
-
   /* # of threads := # of processors */
   int num_of_threads = (int)sysconf(_SC_NPROCESSORS_ONLN);
 
   fprintf(stderr, "# of threads = %d\n", num_of_threads);
 
-  const double width = 1. / (double)num_of_partitions;
   int index = 0;
-  thread_func_param* params = NULL;
+
+  /* sample data; array for the results */
+  int data[array_length];
+  for(index = 0; index < array_length; index++){
+    data[index] = index;
+  }
+
+  int *max = calloc(sizeof(int), num_of_threads);
+  int *argmax = calloc(sizeof(int), num_of_threads);
+
+
   pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
+  thread_func_param* params = NULL;
   pthread_t* threads = NULL;
-  double sum = 0.;
-  double pi = 0.;
 
   pthread_mutex_init(&mutex, NULL);
 
   /* set variables */
   params = (thread_func_param*)malloc(sizeof(thread_func_param) * num_of_threads);
   for (index = 0; index < num_of_threads; index++) {
-    params[index].width = width;
-    params[index].sum = &sum;
-    params[index].mutex = &mutex;
+    params[index].data = data;
+    params[index].thread_id = index;
     params[index].begin = (index == 0)? 0 : params[index - 1].end + 1;
-    params[index].end = (index == num_of_partitions - 1)
-                                ? num_of_partitions - 1
-      : (num_of_partitions / num_of_threads) * (index + 1);
+    params[index].end = ((index == num_of_threads - 1)
+			 ? array_length - 1
+			 : (array_length / num_of_threads * (index + 1) - 1));
+    params[index].max = &max;
+    params[index].argmax = &argmax;
+    params[index].mutex = &mutex;
   }
 
   /* generate threads */
@@ -85,8 +99,15 @@ double compute_pi_by_pthread(const int num_of_partitions)
   free(threads);
   free(params);
 
-  pi = width * sum;
-  return pi;
+
+  for(index = 0; index < num_of_threads; index++){
+    printf("%d\t%d\t%d\n", index, max[index], argmax[index]);
+  }
+
+  free(max);
+  free(argmax);
+
+  return 0;
 }
 
 #endif

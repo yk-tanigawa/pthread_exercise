@@ -4,7 +4,6 @@
     
 
 int main(void){
-
-  printf("%f\n", compute_pi_by_pthread((const int)100));
+  find_max_with_pthread((const int)100);
   return 0;
 }
