@@ -30,7 +30,7 @@ void* thread_func(void* arg)
     if(param->data[i] > thread_max){
       thread_max = param->data[i];
       thread_argmax = i;
-      printf("thread %d\t%d\t%d\t%d\n", param->thread_id, i, thread_max, thread_argmax);
+      //      printf("thread %d\t%d\t%d\t%d\n", param->thread_id, i, thread_max, thread_argmax);
     }
   }
 
