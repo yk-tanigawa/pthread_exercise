@@ -15,6 +15,7 @@ typedef struct _thread_func_param
   int end;
   int **max;
   int **argmax;
+  int *selected;
   pthread_mutex_t* mutex;  
 } thread_func_param;
 
@@ -27,18 +28,18 @@ void* thread_func(void* arg)
   int thread_max = param->data[thread_argmax];
 
   for (i = param->begin + 1; i <= param->end; i++) {
-    if(param->data[i] > thread_max){
+    if((param->data[i] > thread_max) && (param->selected[i] == 0)){
       thread_max = param->data[i];
       thread_argmax = i;
-      //      printf("thread %d\t%d\t%d\t%d\n", param->thread_id, i, thread_max, thread_argmax);
     }
   }
 
-  pthread_mutex_lock(param->mutex);
   (*(param->max))[param->thread_id] = thread_max;
   (*(param->argmax))[param->thread_id] = thread_argmax;
-  pthread_mutex_unlock(param->mutex);
 
+  pthread_mutex_lock(param->mutex);
+  /* some mutual exclusive code */
+  pthread_mutex_unlock(param->mutex);
   printf("thread %d\t%d\t%d\n", param->thread_id, thread_max, thread_argmax);
 
   return NULL;
@@ -47,6 +48,9 @@ void* thread_func(void* arg)
 /* find max and argmax of an array of int */
 int find_max_with_pthread(const int array_length)
 {
+  int t;
+  int T = 10;
+
   /* # of threads := # of processors */
   int num_of_threads = (int)sysconf(_SC_NPROCESSORS_ONLN);
 
@@ -62,7 +66,9 @@ int find_max_with_pthread(const int array_length)
 
   int *max = calloc(sizeof(int), num_of_threads);
   int *argmax = calloc(sizeof(int), num_of_threads);
+  int *selected = calloc(sizeof(int), array_length);
 
+  int max_all, argmax_all;
 
   pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
   thread_func_param* params = NULL;
@@ -81,42 +87,53 @@ int find_max_with_pthread(const int array_length)
 			 : (array_length / num_of_threads * (index + 1) - 1));
     params[index].max = &max;
     params[index].argmax = &argmax;
+    params[index].selected = selected;
     params[index].mutex = &mutex;
   }
 
-  /* generate threads */
-  threads = (pthread_t*)malloc(sizeof(pthread_t) * num_of_threads);
-  for (index = 0; index < num_of_threads; index++) {
-    pthread_create(&threads[index], NULL, thread_func, (void*)&params[index]);
+  for(t = 0; t < T; t++){  
+    /* generate threads */
+    threads = (pthread_t*)malloc(sizeof(pthread_t) * num_of_threads);
+    for (index = 0; index < num_of_threads; index++) {
+      pthread_create(&threads[index], NULL, thread_func, (void*)&params[index]);
+    }
+    
+    /* wait for threads */
+    for (index = 0; index < num_of_threads; index++) {
+      pthread_join(threads[index], NULL);
+    }
+    
+    /* dump results for each thread */
+    for(index = 0; index < num_of_threads; index++){
+      printf("%d\t%d\t%d\n", index, max[index], argmax[index]);
+    }
+    
+    /* compute final results */
+    max_all = max[0];
+    argmax_all = argmax[0];
+    
+    for(index = 1; index < num_of_threads; index++){
+      if(max[index] > max_all){
+	max_all = max[index];
+	argmax_all = argmax[index];
+      }
+    }
+    selected[argmax_all] = 1;
+
+    /* dump final results */
+    printf("t = %d:\t%d @ %d\n", t, max_all, argmax_all);
   }
 
-  /* wait for threads */
-  for (index = 0; index < num_of_threads; index++) {
-    pthread_join(threads[index], NULL);
-  }
 
-  pthread_mutex_destroy(&mutex);
   free(threads);
   free(params);
 
+  pthread_mutex_destroy(&mutex);
 
-  for(index = 0; index < num_of_threads; index++){
-    printf("%d\t%d\t%d\n", index, max[index], argmax[index]);
-  }
-
-  int max_all = max[0], argmax_all = argmax[0];
-
-  for(index = 1; index < num_of_threads; index++){
-    if(max[index] > max_all){
-      max_all = max[index];
-      argmax_all = argmax[index];
-    }
-  }
-
-  printf("max = %d @ %d\n", max_all, argmax_all);
 
   free(max);
   free(argmax);
+  free(selected);
 
   return 0;
 }
